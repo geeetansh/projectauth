@@ -1,7 +1,8 @@
-import { TokenRequest, TokenResponse } from './types';
+import { config } from './config';
+import { TokenResponse } from './types';
 
 export async function exchangeToken(shop: string, code: string): Promise<TokenResponse> {
-  const response = await fetch(`https://${shop}/admin/oauth/access_token`, {
+  const response = await fetch(config.shopify.tokenEndpoint(shop), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -12,16 +13,14 @@ export async function exchangeToken(shop: string, code: string): Promise<TokenRe
   });
 
   if (!response.ok) {
-    const error = await response.text();
-    console.error('Shopify token exchange failed:', error);
-    throw new Error('Failed to exchange token with Shopify');
+    const errorText = await response.text();
+    console.error('Shopify API error:', {
+      status: response.status,
+      error: errorText,
+      shop
+    });
+    throw new Error(errorText);
   }
 
   return response.json();
-}
-
-export function validateRequest(data: any): data is TokenRequest {
-  return typeof data?.shop === 'string' && 
-         typeof data?.code === 'string' && 
-         data.shop.includes('.myshopify.com');
 }

@@ -10,4 +10,5 @@ export interface TokenResponse {
 
 export interface ErrorResponse {
   error: string;
+  details?: string;
 }

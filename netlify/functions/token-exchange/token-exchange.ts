@@ -1,90 +1,75 @@
 import { Handler } from '@netlify/functions';
+import { config } from './config';
+import { validateRequest, validateEnvironment } from './validation';
+import { exchangeToken } from './service';
+import type { ErrorResponse } from './types';
 
 export const handler: Handler = async (event) => {
   // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS'
-      }
+      headers: config.headers.cors
     };
   }
 
+  // Validate HTTP method
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
-      body: JSON.stringify({ error: 'Method not allowed' }),
-      headers: { 'Content-Type': 'application/json' }
+      headers: { ...config.headers.json, ...config.headers.cors },
+      body: JSON.stringify({ error: 'Method not allowed' } satisfies ErrorResponse)
     };
   }
 
   try {
-    const { shop, code } = JSON.parse(event.body || '{}');
-    
-    if (!shop || !code) {
+    // Parse and validate request
+    const data = JSON.parse(event.body || '{}');
+    if (!validateRequest(data)) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: 'Missing required parameters: shop and code' }),
-        headers: { 'Content-Type': 'application/json' }
+        headers: { ...config.headers.json, ...config.headers.cors },
+        body: JSON.stringify({ 
+          error: 'Invalid request parameters' 
+        } satisfies ErrorResponse)
       };
     }
 
-    const apiKey = process.env.VITE_SHOPIFY_API_KEY;
-    const apiSecret = process.env.VITE_SHOPIFY_CLIENT_SECRET;
-
-    if (!apiKey || !apiSecret) {
-      console.error('Missing required environment variables');
+    // Validate environment
+    const envValidation = validateEnvironment();
+    if (!envValidation.valid) {
+      console.error('Environment validation failed:', envValidation.error);
       return {
         statusCode: 500,
-        body: JSON.stringify({ error: 'Server configuration error' }),
-        headers: { 'Content-Type': 'application/json' }
+        headers: { ...config.headers.json, ...config.headers.cors },
+        body: JSON.stringify({ 
+          error: 'Server configuration error',
+          details: envValidation.error 
+        } satisfies ErrorResponse)
       };
     }
 
-    console.log('Making request to Shopify with:', {
-      shop,
-      apiKey,
-      hasSecret: !!apiSecret
-    });
+    // Exchange token
+    const token = await exchangeToken(data.shop, data.code);
 
-    const response = await fetch(`https://${shop}/admin/oauth/access_token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        client_id: apiKey,
-        client_secret: apiSecret,
-        code,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Shopify API error:', errorText);
-      return {
-        statusCode: response.status,
-        body: JSON.stringify({ error: 'Failed to exchange token with Shopify', details: errorText }),
-        headers: { 'Content-Type': 'application/json' }
-      };
-    }
-
-    const data = await response.json();
     return {
       statusCode: 200,
-      body: JSON.stringify(data),
-      headers: { 
-        'Content-Type': 'application/json',
+      headers: {
+        ...config.headers.json,
+        ...config.headers.cors,
         'Cache-Control': 'no-store'
-      }
+      },
+      body: JSON.stringify(token)
     };
   } catch (error) {
     console.error('Token exchange error:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Internal server error', details: error.message }),
-      headers: { 'Content-Type': 'application/json' }
+      headers: { ...config.headers.json, ...config.headers.cors },
+      body: JSON.stringify({ 
+        error: 'Token exchange failed',
+        details: error.message 
+      } satisfies ErrorResponse)
     };
   }
 }
