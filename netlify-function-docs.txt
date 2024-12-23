@@ -1,0 +1,71 @@
+Netlify Function Documentation
+============================
+
+1. Function Location
+-------------------
+The function should be located at:
+netlify/functions/token-exchange/token-exchange.ts
+
+2. Function Structure
+--------------------
+The function follows the Netlify Functions handler pattern:
+
+```typescript
+import { Handler } from '@netlify/functions';
+
+export const handler: Handler = async (event) => {
+  // Function implementation
+};
+```
+
+3. Current Implementation Analysis
+--------------------------------
+The current implementation has these key components:
+
+a) HTTP Method Check
+   - Ensures only POST requests are accepted
+   - Returns 405 for other methods
+
+b) Request Body Parsing
+   - Extracts shop and code from JSON body
+   - Validates required parameters
+   - Returns 400 if parameters missing
+
+c) Shopify API Call
+   - Makes POST request to Shopify's OAuth endpoint
+   - Uses environment variables for credentials
+   - Handles API errors with proper logging
+
+d) Response Structure
+   - Success (200): Returns Shopify token response
+   - Error (400): Missing parameters
+   - Error (405): Wrong method
+   - Error (500): Internal server error
+
+4. Common Issues & Solutions
+--------------------------
+If getting 404 errors, check:
+1. Function file is in correct location
+2. Function filename matches the URL path
+3. netlify.toml has correct functions directory:
+   ```toml
+   [functions]
+   directory = "netlify/functions"
+   ```
+
+5. Environment Variables
+-----------------------
+Required variables:
+- VITE_SHOPIFY_API_KEY
+- VITE_SHOPIFY_CLIENT_SECRET
+
+These must be set in Netlify's deployment settings.
+
+6. Testing
+----------
+Test endpoint: /.netlify/functions/token-exchange
+Method: POST
+Body: {
+  "shop": "store.myshopify.com",
+  "code": "access_code"
+}
